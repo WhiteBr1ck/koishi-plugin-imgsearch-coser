@@ -1,0 +1,28 @@
+# Only track source code and required project files.
+/*
+!/.gitignore
+!/src/
+!/client/
+!/package.json
+!/tsconfig.json
+!/README.md
+!/LICENSE
+
+# Exclude local and generated files inside source directories too.
+node_modules/
+lib/
+dist/
+.runtime/
+tests/
+__tests__/
+coverage/
+*.test.*
+*.spec.*
+*.tsbuildinfo
+*.log
+*.tmp
+*.bak
+.env
+.env.*
+.DS_Store
+Thumbs.db

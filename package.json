@@ -1,0 +1,76 @@
+{
+  "name": "koishi-plugin-imgsearch-coser",
+  "version": "0.2.0",
+  "description": "找 Coser！利用 Google Lens 图片搜索查找 X/Twitter 或者其他平台上的博主",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "dist",
+    "client",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "author": "whitebr1ck",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WhiteBr1ck/koishi-plugin-imgsearch-coser.git"
+  },
+  "homepage": "https://github.com/WhiteBr1ck/koishi-plugin-imgsearch-coser#readme",
+  "bugs": {
+    "url": "https://github.com/WhiteBr1ck/koishi-plugin-imgsearch-coser/issues"
+  },
+  "keywords": [
+    "koishi",
+    "plugin",
+    "coser",
+    "google-lens",
+    "serpapi",
+    "reverse-image-search",
+    "image-search"
+  ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "peerDependencies": {
+    "koishi": "^4.18.9",
+    "@koishijs/plugin-console": "^5.30.0"
+  },
+  "peerDependenciesMeta": {
+    "@koishijs/plugin-console": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "cheerio": "^1.1.2",
+    "sharp": "^0.34.3"
+  },
+  "devDependencies": {
+    "@koishijs/client": "^5.30.4",
+    "tsx": "^4.16.2",
+    "typescript": "^5.6.2",
+    "@types/node": "^22.7.5"
+  },
+  "scripts": {
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit --incremental false -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "build:client": "node -e \"import('@koishijs/client/lib').then(({ build }) => build(process.cwd()))\""
+  },
+  "koishi": {
+    "description": {
+      "zh": "找 Coser！利用 Google Lens 图片搜索查找 X/Twitter 或者其他平台上的博主"
+    },
+    "service": {
+      "required": [
+        "http"
+      ],
+      "optional": [
+        "console"
+      ]
+    },
+    "preview": true
+  }
+}
