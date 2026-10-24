@@ -6,6 +6,9 @@ import { normalizeResult, platformTargetCount, selectResults } from './platforms
 import { DirectProvider } from './providers/direct'
 import { SerpApiProvider } from './providers/serpapi'
 import type { Config, ImageInput, MatchKind, SearchResult, SocialResult } from './types'
+import type { DiagnosticReporter } from './diagnostics'
+import type { GoogleCookieStore } from './google-cookies'
+import { SearchRouting } from './routing'
 
 export interface SearchProvider { search(kind: MatchKind): Promise<SearchResult[]> }
 export interface FinalResults { results: SocialResult[]; warnings: string[] }
@@ -14,7 +17,7 @@ function normalize(results: SearchResult[]): SocialResult[] {
   return results.map(normalizeResult).filter((value): value is SocialResult => !!value)
 }
 
-export async function gatherResults(provider: SearchProvider, config: Config): Promise<FinalResults> {
+export async function gatherResults(provider: SearchProvider, config: Config, diagnostic?: DiagnosticReporter): Promise<FinalResults> {
   let rows: SearchResult[] = []
   const warnings: string[] = []
   if (config.strategy !== 'visual') {
@@ -32,14 +35,20 @@ export async function gatherResults(provider: SearchProvider, config: Config): P
       warnings.push('视觉相似结果未能补全。' + userError(error))
     }
   }
-  return { results: normalize(rows), warnings }
+  const results = normalize(rows)
+  diagnostic?.({ stage: 'filter', rawCount: rows.length, platformCount: results.length, selectedCount: selectResults(results, config).length })
+  return { results, warnings }
 }
 
-export async function searchImage(input: ImageInput, network: Network, config: Config): Promise<FinalResults> {
+export async function searchImage(input: ImageInput, network: Network, config: Config,
+  options: { googleCookies?: GoogleCookieStore; diagnostic?: DiagnosticReporter; routing?: SearchRouting } = {}): Promise<FinalResults> {
   const image = await uploadImage(input)
   network.signal.throwIfAborted()
-  const provider = config.provider === 'serpapi' ? new SerpApiProvider(network, config, image) : new DirectProvider(network, config, input, image)
-  const output = await gatherResults(provider, config)
+  const routing = options.routing || new SearchRouting(config)
+  const provider = routing.create((endpoint, diagnostic) => endpoint.provider === 'serpapi'
+    ? new SerpApiProvider(network, { ...config, apiKey: endpoint.apiKey }, image, diagnostic)
+    : new DirectProvider(network, config, input, image, options.googleCookies, diagnostic), network.signal, options.diagnostic)
+  const output = await gatherResults(provider, config, options.diagnostic)
   if (config.fetchAuthor) {
     // Visit only selected results. Refill after enrichment merges same-author posts.
     const attempted = new Set<string>()

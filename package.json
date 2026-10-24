@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-imgsearch-coser",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "description": "找 Coser！利用 Google Lens 图片搜索查找 X/Twitter 或者其他平台上的博主",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -45,7 +45,8 @@
   },
   "dependencies": {
     "cheerio": "^1.1.2",
-    "sharp": "^0.34.3"
+    "sharp": "^0.34.3",
+    "tough-cookie": "^6.0.2"
   },
   "devDependencies": {
     "@koishijs/client": "^5.30.4",

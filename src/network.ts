@@ -1,6 +1,21 @@
 import type { Context, HTTP } from 'koishi'
 import { SearchError } from './errors'
 import { isGoogleHost } from './platforms'
+import { promises as dns } from 'node:dns'
+import { GoogleCookieStore } from './google-cookies'
+import type { DiagnosticReporter, SearchStage } from './diagnostics'
+
+const QQ_IMAGE_HOSTS = new Set(['multimedia.nt.qq.com.cn', 'gchat.qpic.cn', 'c2cpicdw.qpic.cn'])
+
+// Proxy Fake-IP mode uses the benchmarking range. Limit the exception to QQ image CDNs.
+async function isQqFakeIp(hostname: string): Promise<boolean> {
+  if (!QQ_IMAGE_HOSTS.has(hostname)) return false
+  try {
+    const addresses = await dns.lookup(hostname, { all: true })
+    return addresses.length > 0 && addresses.every(({ address, family }) =>
+      family === 4 && /^198\.(?:18|19)\.\d{1,3}\.\d{1,3}$/.test(address))
+  } catch { return false }
+}
 
 export class Network {
   constructor(private readonly ctx: Pick<Context, 'http'>, readonly signal: AbortSignal, readonly timeout: number) {}
@@ -40,8 +55,11 @@ export class Network {
     for (let i = 0; i < 6; i++) {
       let parsed: URL
       try { parsed = new URL(url) } catch { throw new SearchError('IMAGE_URL', '图片网址无效，请直接发送图片。') }
-      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || (parsed.port && !['80', '443'].includes(parsed.port)) || await this.ctx.http.isLocal(url)) {
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || (parsed.port && !['80', '443'].includes(parsed.port))) {
         throw new SearchError('IMAGE_URL', '仅支持公开 HTTP 或 HTTPS 图片地址，请直接发送图片。')
+      }
+      if (await this.ctx.http.isLocal(url) && !await isQqFakeIp(parsed.hostname)) {
+        throw new SearchError('IMAGE_LOCAL', '图片地址被识别为内网或代理地址，无法下载。请检查代理 DNS 设置，或换一张图片重试。')
       }
       if (allowed && !allowed(url)) throw new SearchError('REDIRECT', '页面跳转到了其他平台。')
       const response = await this.request(url, { timeout, headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'image/*,text/html;q=0.8,*/*;q=0.5' } }, limit)
@@ -56,32 +74,32 @@ export class Network {
   }
 }
 
-/** A per-search Google-only cookie jar. Never forward cookies to result sites. */
+/** Google-only requests with an optionally shared cookie store. */
 export class GoogleSession {
-  private cookies = new Map<string, string>()
-  constructor(private readonly network: Network, private readonly userAgent: string, cookie: string) {
-    for (const pair of cookie.split(';')) {
-      const index = pair.indexOf('=')
-      if (index > 0) this.cookies.set(pair.slice(0, index).trim(), pair.slice(index + 1).trim())
-    }
+  private readonly cookies: GoogleCookieStore
+  constructor(private readonly network: Network, private readonly userAgent: string, cookie: string | GoogleCookieStore,
+    private readonly diagnostic?: DiagnosticReporter) {
+    this.cookies = typeof cookie === 'string' ? new GoogleCookieStore(cookie) : cookie
   }
 
-  async request(url: string, data?: FormData, resolveOutbound = false): Promise<HTTP.Response<Buffer>> {
+  async request(url: string, data?: FormData, resolveOutbound = false, stage: SearchStage = 'visual'): Promise<HTTP.Response<Buffer>> {
     for (let i = 0; i < 6; i++) {
       const parsed = new URL(url)
       if (parsed.protocol !== 'https:' || parsed.port || parsed.username || parsed.password || !isGoogleHost(parsed.hostname)) {
         throw new SearchError('GOOGLE_REDIRECT', 'Lens 返回了不支持的跳转地址，请切换 SerpApi 接口。')
       }
-      const response = await this.network.request(url, {
-        method: data ? 'POST' : 'GET', data,
-        headers: { 'User-Agent': this.userAgent, Accept: 'text/html',
-          Cookie: [...this.cookies].map(([key, value]) => `${key}=${value}`).join('; ') },
-      })
-      for (const raw of response.headers.getSetCookie?.() || []) {
-        const pair = raw.split(';')[0]
-        const index = pair.indexOf('=')
-        if (index > 0) this.cookies.set(pair.slice(0, index), pair.slice(index + 1))
+      let response
+      try {
+        response = await this.network.request(url, {
+          method: data ? 'POST' : 'GET', data,
+          headers: { 'User-Agent': this.userAgent, Accept: 'text/html', Cookie: this.cookies.header(url) },
+        })
+      } catch (error) {
+        this.diagnostic?.({ stage, outcome: 'error', error: error instanceof SearchError ? error.code : 'REQUEST_FAILED' })
+        throw error
       }
+      const cookiesUpdated = this.cookies.update(url, response.headers)
+      this.diagnostic?.({ stage, httpStatus: response.status, cookiesUpdated })
       const location = response.headers.get('location')
       if (response.status >= 300 && response.status < 400 && location) {
         const next = new URL(location, url)

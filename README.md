@@ -19,7 +19,7 @@
 
 | 接口 | 使用前配置 | 图片提交方式 |
 | --- | --- | --- |
-| SerpApi Google Lens | `apiKey` | 上传图片文件 |
+| SerpApi Google Lens | `apiKey` 或 `apiKeys` | 上传图片文件 |
 | Google Lens 网页 | `googleCookie` | 默认上传图片文件 |
 
 ### 获取 SerpApi API Key
@@ -39,14 +39,32 @@
 5. 打开 **Headers（标头） → Request Headers（请求标头）**，复制 `Cookie` 的完整值。
 6. 在插件的“搜索引擎设置”中选择 **Google Lens 网页**，将值粘贴到“Google Lens 网页接口设置”的 `googleCookie`，保存配置。
 
+建议在部署机器、与插件同出口的浏览器中获取。插件会在本次运行期间续用 Google 更新的 Cookie；重载后从配置值开始，不写回配置或磁盘。JavaScript 验证仍需在浏览器中完成。
+
+### Key 轮换与接口切换
+
+在 `apiKeys` 中添加更多 SerpApi Key，每项一个；原有 `apiKey` 继续生效，重复项会自动去除。新搜索轮流使用 Key，同一张图的精确匹配和视觉相似尽量复用同一个 Key。
+
+`provider` 是首选接口，`autoFallback` 默认开启：
+
+| 首选接口 | 失败后的尝试顺序 |
+| --- | --- |
+| SerpApi | 其他可用 Key，然后 Google Lens 网页 |
+| Google Lens 网页 | 可用的 SerpApi Key |
+
+只尝试已配置的接口。关闭 `autoFallback` 后只使用所选接口，SerpApi 内部仍会轮换 Key。正常搜索无结果不触发切换，已有结果会保留；所有重试共用总超时。
+
+暂不可用的项会进入冷却：Key 无效或额度不足为 30 分钟，Google 验证或封锁为 5 分钟，其他请求故障为 1 分钟。冷却结束后，在后续搜索中重新尝试；重载插件或更新配置会重置状态。不会后台查询额度。
 
 ## 配置
 
 | 配置项 | 用途 | 默认值 |
 | --- | --- | --- |
-| `provider` | 搜索接口 | SerpApi |
+| `provider` | 首选搜索接口 | SerpApi |
+| `autoFallback` | 接口失败时自动切换 | 开启 |
 | `language` | 搜索语言，下拉选择 | 简体中文 |
 | `apiKey` | SerpApi API Key | 未填写 |
+| `apiKeys` | 更多 SerpApi Key，每项一个 | 空列表 |
 | `googleCookie` | Google Cookie | 未填写 |
 | `platforms` | 平台启用、顺序、数量和链接类型 | 见下表 |
 | `blockedWords` | 过滤词，默认折叠 | 内置词表 |
@@ -115,7 +133,7 @@
 
 ### 调试日志
 
-开启 `logDetails` 后，在 Koishi 日志中查看请求阶段、图片大小、结果数、缓存命中、耗时和错误代码。
+开启 `logDetails` 后，可查看实际接口、Key 序号、切换和冷却情况，以及请求阶段、HTTP 状态、SerpApi 搜索 ID、筛选前后的结果数、缓存命中和耗时。日志不记录 API Key、Cookie 或响应正文。
 
 
 ## License

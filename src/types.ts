@@ -34,6 +34,8 @@ export interface ImageInput {
 export interface Config {
   provider: Provider
   apiKey: string
+  apiKeys: string[]
+  autoFallback: boolean
   strategy: Strategy
   language: string
   directUploadMode: 'file' | 'url'

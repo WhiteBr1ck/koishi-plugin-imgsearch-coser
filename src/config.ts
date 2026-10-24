@@ -12,7 +12,8 @@ export const ConfigSchema: Schema<Config> = Schema.intersect([
     provider: field(Schema.union([
       Schema.const('serpapi').description('SerpApi'),
       Schema.const('direct').description('Google Lens 网页'),
-    ]).default('serpapi'), '搜索引擎'),
+    ]).default('serpapi'), '首选搜索引擎'),
+    autoFallback: field(Schema.boolean().default(true).comment('所选接口失败时，使用已配置的另一接口重试。'), '自动切换接口'),
     language: field(Schema.union([
       Schema.const('zh-CN').description('简体中文'),
       Schema.const('zh-TW').description('繁體中文'),
@@ -27,6 +28,7 @@ export const ConfigSchema: Schema<Config> = Schema.intersect([
   }).description('搜索引擎设置'),
   Schema.object({
     apiKey: field(Schema.string().default('').comment('使用前请填写 API Key。登录 serpapi.com，在 https://serpapi.com/manage-api-key 复制 Key 后粘贴到此处。'), 'API Key', 'secret'),
+    apiKeys: Schema.array(Schema.string().role('secret')).max(20).default([]).description('更多 API Key').comment('与 apiKey 一起轮换，额度不足或出错时尝试下一个。'),
   }).description('SerpApi 接口设置'),
   Schema.object({
     googleCookie: field(Schema.string().default('').comment('默认上传图片，使用前请填写 Cookie。在 Google Lens 按 F12 打开 Network，上传图片完成搜索，选择 Google 搜索结果页面请求，在 Headers → Request Headers 中复制 Cookie 完整值，不含 Cookie: 前缀。过期后重新获取，详细步骤见 README。'), 'Cookie', 'secret'),
